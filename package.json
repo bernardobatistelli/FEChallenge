@@ -1,0 +1,45 @@
+{
+  "name": "ats-analytics-copilot-takehome",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "next typegen && tsc --noEmit",
+    "db:seed": "tsx src/db/seed.ts",
+    "eval": "tsx evals/run.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/amazon-bedrock": "^4.0.77",
+    "@ai-sdk/anthropic": "^3.0.0",
+    "@ai-sdk/openai": "^3.0.0",
+    "@ai-sdk/provider": "^3.0.0",
+    "@ai-sdk/react": "^3.0.0",
+    "@electric-sql/pglite": "0.2.17",
+    "@tanstack/react-query": "^5.80.7",
+    "@trpc/client": "^11.4.0",
+    "@trpc/server": "^11.4.0",
+    "@trpc/tanstack-react-query": "^11.4.0",
+    "ai": "6.0.182",
+    "drizzle-orm": "0.41.0",
+    "next": "16.2.6",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "superjson": "^2.2.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.15",
+    "tsx": "^4.19.2",
+    "typescript": "^5.8.3",
+    "vitest": "^3.0.0"
+  }
+}

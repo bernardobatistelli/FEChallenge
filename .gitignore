@@ -1,0 +1,23 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next
+/out
+
+# local database (PGlite, file-backed)
+/.pglite
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# env
+.env*.local
+
+# misc
+.DS_Store
+
+# private reference solution — must NOT ship in the public/candidate repo.
+# Move this into your private repo; it's here only so the full build isn't lost.
+/_reference
