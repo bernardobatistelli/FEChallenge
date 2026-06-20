@@ -30,14 +30,6 @@ import type { Display, ToolResult } from "./artifact";
 
 // Enum domains, named once so the inputSchema and the model-facing description
 // stay in sync (they mirror the column comments in src/db/schema.ts).
-const STAGES = [
-  "applied",
-  "screen",
-  "interview",
-  "offer",
-  "hired",
-  "rejected",
-] as const;
 const SOURCES = [
   "referral",
   "linkedin",
@@ -97,10 +89,18 @@ export function buildTools(ctx: AnalyticsCtx) {
     applicationCountByStage: tool({
       description:
         "Count applications grouped by pipeline stage (applied, screen, interview, offer, hired, rejected). Pass a jobId to scope to one job.",
-      inputSchema: z.object({ jobId: z.string().optional() }),
+      inputSchema: z.object({
+        jobId: z
+          .string()
+          .optional()
+          .describe(
+            "Scope the counts to one job id. Omit entirely unless the user asks about a specific job; never pass an empty string.",
+          ),
+      }),
       async execute({ jobId }) {
         return safe("applicationCountByStage", async () => {
-          const rows = await applicationCountByStage(ctx, { jobId });
+          // Defensive: the model sometimes emits jobId:"" — treat it as absent.
+          const rows = await applicationCountByStage(ctx, { jobId: jobId || undefined });
           return result(rows, {
             kind: "bar",
             x: "stage",
@@ -154,25 +154,39 @@ export function buildTools(ctx: AnalyticsCtx) {
     }),
 
     // PII-BEARING individual roster. Pick this ONLY for specific people, not for
-    // counts or trends — and only name/email/phone the caller's role may read
-    // are ever projected (analyst rows omit them entirely).
+    // counts or trends — and only name/email/phone the caller's role may read are
+    // ever projected (analyst rows omit them entirely).
+    //
+    // Deliberately NARROW surface: `source` + `limit` only. The richer `stage` /
+    // `jobId` filters the query layer supports are NOT exposed here, because the
+    // model (gpt-4o-mini AND gpt-4o) compulsively fills optional params — it would
+    // add a spurious `stage` or hallucinate a `jobId` for a plain "list candidates"
+    // ask, wrongly narrowing or emptying the result. Fewer knobs = correct rosters.
+    // (The query fn keeps those filters for direct/structured callers; see its
+    // unit tests.)
     listCandidates: tool({
       description:
-        "List individual candidates in this workspace. Use ONLY when the user asks for specific people or a roster ('list candidates', 'who applied for X', 'show me candidates from referrals') — for counts or trends use the aggregate tools instead. Optional filters: source (referral, linkedin, job_board, agency, careers_site), stage (applied, screen, interview, offer, hired, rejected), jobId, and limit. This tool can surface candidate PII (name/email/phone), but those columns are only included for roles permitted to see them — for an analyst they are omitted from every row. Answer from the columns present; never invent hidden values.",
+        "List individual candidates in this workspace. Use ONLY when the user asks for specific people or a roster ('list candidates', 'who are our candidates', 'show me candidates from referrals') — for counts or trends use the aggregate tools instead. Optionally filter by source (referral, linkedin, job_board, agency, careers_site) when the user names one. This tool can surface candidate PII (name/email/phone), but those columns are only included for roles permitted to see them — for an analyst they are omitted from every row. Even then, still use this tool for roster requests and answer from the columns present (id, source, applied date) rather than declining; never invent hidden values.",
       inputSchema: z.object({
-        source: z.enum(SOURCES).optional(),
-        stage: z.enum(STAGES).optional(),
-        jobId: z.string().optional(),
-        limit: z.number().int().min(1).max(100).optional(),
+        source: z
+          .enum(SOURCES)
+          .optional()
+          .describe(
+            "Filter to one acquisition source. Omit entirely unless the user names a source (e.g. 'from referrals').",
+          ),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe(
+            "How many rows to return (1-100). Omit to return ALL matching candidates. For vague amounts like 'a few', 'some', or 'a handful', return about 5 — never just 1 unless the user clearly wants one specific person.",
+          ),
       }),
-      async execute({ source, stage, jobId, limit }) {
+      async execute({ source, limit }) {
         return safe("listCandidates", async () => {
-          const rows = await listCandidates(ctx, {
-            source,
-            stage,
-            jobId,
-            limit,
-          });
+          const rows = await listCandidates(ctx, { source, limit });
           return result(rows, {
             kind: "table",
             columns: candidateColumns(),

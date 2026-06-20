@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it } from "vitest";
 
+import { eq } from "drizzle-orm";
+
 import {
   candidateSelection,
   candidatesBySource,
@@ -10,7 +12,7 @@ import {
 import { db, ensureSchema } from "./client";
 import { canReadColumn } from "./permissions";
 import { seed } from "./seed";
-import { workspaces } from "./schema";
+import { applications, workspaces } from "./schema";
 
 /**
  * Acceptance for Spec 01 — proven by calling the query fns directly (no model).
@@ -102,6 +104,31 @@ describe("tenant scoping", () => {
     const mer = await jobsOverview(MER);
     expect(mer).toHaveLength(MER_JOBS);
     expect(mer.every((j) => j.id.startsWith("mer-"))).toBe(true);
+  });
+
+  it("jobsOverview counts only same-workspace applications (the join is scoped)", async () => {
+    // A Meridian application that points at a Brightwave job id. The job-id FK is
+    // satisfiable across workspaces, so without the workspace filter on the join
+    // this would inflate Brightwave's count — the regression we're guarding.
+    const POISON = "poison-app-cross-tenant";
+    const jobId = "bw-job-1";
+    const before = (await jobsOverview(BW)).find((j) => j.id === jobId)!.applications;
+
+    await db.insert(applications).values({
+      id: POISON,
+      workspaceId: "meridian",
+      candidateId: "mer-cand-1",
+      jobId,
+      stage: "applied",
+      appliedAt: new Date(),
+      updatedAt: new Date(),
+    });
+    try {
+      const after = (await jobsOverview(BW)).find((j) => j.id === jobId)!.applications;
+      expect(after).toBe(before); // the foreign application is not counted
+    } finally {
+      await db.delete(applications).where(eq(applications.id, POISON));
+    }
   });
 
   it("candidatesBySource counts only the caller's workspace", async () => {

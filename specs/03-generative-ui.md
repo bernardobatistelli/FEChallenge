@@ -2,6 +2,9 @@
 
 **Status:** Draft · **Depends on:** Spec 02 · **Estimate:** ~45m
 
+> **Sequencing:** built **after Spec 04** (benchmarks). The adversarial evals validate the
+> agent's tool-driving and guardrails first; this spec turns those proven tool results into UI.
+
 ## Goal
 Turn tool results into real, streaming generative UI — charts and tables that feel shippable,
 with deliberate loading/empty/error states.

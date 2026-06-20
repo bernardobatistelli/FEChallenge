@@ -110,9 +110,11 @@ export async function candidatesBySource(
 
 /**
  * Per-job overview with its application volume, scoped to the workspace. Uses a
- * LEFT JOIN so jobs with zero applications still appear (count 0). The join is
- * keyed on `jobId`, which is itself workspace-unique, and the WHERE is scoped
- * through `scopeWhere(jobs, ...)`, so no other tenant's rows can enter.
+ * LEFT JOIN so jobs with zero applications still appear (count 0). The WHERE is
+ * scoped through `scopeWhere(jobs, ...)`, and the join itself ANDs the workspace
+ * filter onto `applications` — so the count never folds in another tenant's rows
+ * even if a foreign application referenced one of this workspace's job ids.
+ * (Defense in depth: it doesn't lean on job ids being globally unique.)
  */
 export async function jobsOverview(ctx: AnalyticsCtx): Promise<
   { id: string; title: string; department: string; status: string; applications: number }[]
@@ -126,7 +128,13 @@ export async function jobsOverview(ctx: AnalyticsCtx): Promise<
       applications: count(applications.id),
     })
     .from(jobs)
-    .leftJoin(applications, eq(applications.jobId, jobs.id))
+    .leftJoin(
+      applications,
+      and(
+        eq(applications.jobId, jobs.id),
+        eq(applications.workspaceId, ctx.workspaceId),
+      ),
+    )
     .where(scopeWhere(jobs, ctx))
     .groupBy(jobs.id, jobs.title, jobs.department, jobs.status)
     .orderBy(desc(count(applications.id)));

@@ -4,6 +4,11 @@ Spec-Driven Development. Each spec is a small, sequenced slice with a **testable
 acceptance bar**. Build them in order; the hard requirement (Spec 01) comes first so
 tenant + PII correctness is provable before anything is layered on top.
 
+> **Execution order:** `00 → 01 → 02 → 04 → 03 → 05`. The file numbers are stable, but
+> **Spec 04 (benchmarks) runs before Spec 03 (UI)**: prove the agent can't be talked into a
+> tenant/PII leak before investing in the generative UI. Both depend only on Spec 02, so the
+> swap is clean.
+
 Each spec carries a header (**Status · Depends on · Estimate**) then
 **Goal → Contract → In scope → Out of scope → Acceptance → Files**. The *Contract* section
 pins signatures/types so nothing is re-decided at implementation time.

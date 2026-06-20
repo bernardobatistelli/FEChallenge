@@ -16,12 +16,18 @@ never `@/db/client` (`db`) and never raw SQL. Params are **optional** (the mock 
 | `applicationCountByStage` *(given)* | `applicationCountByStage` | `{ jobId? }` | `bar` (x=stage, y=count) |
 | `candidatesBySource` | `candidatesBySource` | `{}` | `bar` (x=source, y=count) |
 | `jobsOverview` | `jobsOverview` | `{ status? }` | `table` |
-| `listCandidates` **(PII-bearing)** | `listCandidates` | `{ source?, stage?, jobId?, limit? }` | `table` |
+| `listCandidates` **(PII-bearing)** | `listCandidates` | `{ source?, limit? }` | `table` |
 
 - Descriptions are written *for the model*: say what the tool answers and when to pick it,
   name the enum values it accepts (stages, sources, statuses).
-- Optional: a small per-tool try/catch helper that turns a thrown query error into a structured
-  `{ error }` result the model can read (pairs with Spec 00's `onError`).
+- **Narrow `listCandidates` surface (`source` + `limit` only).** The query fn supports
+  `stage` / `jobId` too (kept + unit-tested), but those are **not exposed to the model**: in the
+  real-agent smoke test both `gpt-4o-mini` *and* `gpt-4o` compulsively fill optional params —
+  adding a spurious `stage` or hallucinating a `jobId` for a plain "list candidates" ask, which
+  wrongly narrowed or emptied the result. Fewer knobs ⇒ correct rosters. Empty-string params
+  the model still emits (e.g. `jobId:""`) are coerced to absent in `execute`.
+- A small per-tool try/catch helper turns a thrown query error into a structured `{ error }`
+  result the model can read (pairs with Spec 00's `onError`).
 
 ## In scope
 The four tools above + their display hints; tighten the system prompt only if the agent needs a

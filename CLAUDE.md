@@ -59,14 +59,17 @@ for the model choice goes in `DECISIONS.md`.
 ## Scope & build order
 
 Spec-Driven: the work is sliced into sequenced specs under [`specs/`](specs/README.md),
-each with a Contract (signatures/types) and a testable acceptance bar. Order:
+each with a Contract (signatures/types) and a testable acceptance bar. File numbers are
+stable; **execution order is `00 → 01 → 02 → 04 → 03 → 05`** — benchmarks (04) run before the
+UI (03) so the agent's guardrails are proven against adversarial prompts before any UI is
+built on top:
 
 ```
-00 real agent (OpenAI + prompt)   ~30m   no deps
-01 scoped query layer [HARD REQ]  ~75m   no deps   ← canReadColumn, candidateSelection, queries, unit tests
-02 tool catalog                   ~40m   ← 01      ← incl. PII-bearing listCandidates
-03 generative UI (bar + table)    ~45m   ← 02
-04 adversarial evals              ~30m   ← 02
+00 real agent (OpenAI + prompt)   ~30m   no deps                                                          [done]
+01 scoped query layer [HARD REQ]  ~75m   no deps   canReadColumn, candidateSelection, queries, unit tests [done]
+02 tool catalog                   ~40m   ← 01      incl. PII-bearing listCandidates                       [done]
+04 adversarial evals              ~30m   ← 02      tenant + PII evals (run BEFORE 03)                      [done]
+03 generative UI (bar + table)    ~45m   ← 02      tool results → charts/tables
 05 applications over time (line)  ~30m   ← 01–03   optional stretch
 ```
 
@@ -124,7 +127,8 @@ file-backed at `./.pglite`) · Tailwind v3 · TypeScript strict.
 pnpm install
 pnpm db:seed      # wipe + seed the two workspaces (Brightwave, Meridian Logistics)
 pnpm dev          # http://localhost:3000
-pnpm eval         # run agent evals once (Evalite)
+pnpm smoke        # real-model smoke test (uses .env.local; spends tokens) — the manual deliverable check
+pnpm eval         # run agent evals once (Evalite, on the mock)
 pnpm eval:dev     # Evalite watch + local UI
 pnpm typecheck
 pnpm test         # vitest
