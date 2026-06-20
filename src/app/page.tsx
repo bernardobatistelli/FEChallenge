@@ -6,13 +6,18 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { ROLES } from "@/db/permissions";
-import type { Display, Row } from "@/agent/artifact";
+import type { ToolResult } from "@/agent/artifact";
 import {
   getActiveRole,
   getActiveWorkspace,
   useTenant,
   useTRPC,
 } from "./providers";
+import {
+  ArtifactError,
+  ArtifactLoading,
+  ToolArtifact,
+} from "./tool-artifact";
 
 export default function Page() {
   const { activeWorkspace, setActiveWorkspace, role, setRole } = useTenant();
@@ -105,29 +110,53 @@ export default function Page() {
             </p>
           )}
 
-          {messages.map((message) => (
-            <div key={message.id} className="space-y-2">
-              <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
-                {message.role}
+          {messages.map((message) => {
+            const visibleParts = message.parts
+              .map((part, originalIndex) => ({ part, originalIndex }))
+              .filter(
+                ({ part }) =>
+                  part.type === "text" || part.type.startsWith("tool-"),
+              );
+            const orderedParts =
+              message.role === "assistant"
+                ? [
+                    ...visibleParts.filter(({ part }) => part.type === "text"),
+                    ...visibleParts.filter(({ part }) =>
+                      part.type.startsWith("tool-"),
+                    ),
+                  ]
+                : visibleParts;
+
+            return (
+              <div key={message.id} className="space-y-2">
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                  {message.role}
+                </div>
+                {orderedParts.map(({ part, originalIndex }) => {
+                  if (part.type === "text") {
+                    const text =
+                      message.role === "assistant"
+                        ? cleanAssistantText(part.text)
+                        : part.text;
+                    if (!text) return null;
+
+                    return (
+                      <p
+                        key={originalIndex}
+                        className="whitespace-pre-wrap rounded-md bg-gray-50 px-3 py-2 text-sm"
+                      >
+                        {text}
+                      </p>
+                    );
+                  }
+                  if (part.type.startsWith("tool-")) {
+                    return <ToolCall key={originalIndex} part={part} />;
+                  }
+                  return null;
+                })}
               </div>
-              {message.parts.map((part, i) => {
-                if (part.type === "text") {
-                  return (
-                    <p
-                      key={i}
-                      className="whitespace-pre-wrap rounded-md bg-gray-50 px-3 py-2 text-sm"
-                    >
-                      {part.text}
-                    </p>
-                  );
-                }
-                if (part.type.startsWith("tool-")) {
-                  return <ToolCall key={i} part={part} />;
-                }
-                return null;
-              })}
-            </div>
-          ))}
+            );
+          })}
 
           {busy && <p className="text-xs text-gray-400">Copilot is working&hellip;</p>}
         </div>
@@ -174,75 +203,48 @@ export default function Page() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Tool-call rendering.
-//
-// TODO(candidate): this is a deliberately bare stub. Each tool returns
-// `{ rows, display }` where `display.kind` is "table" | "bar" | "line". Turn
-// these into real, streaming generative UI — render bar/line charts, show the
-// "calling…" → "result" transition nicely, handle empty/error states. Make it
-// something you'd ship.
-// ---------------------------------------------------------------------------
 type ToolPart = {
   type: string;
   state?: string;
   input?: unknown;
-  output?: { rows?: Row[]; display?: Display };
+  output?: ToolResult | { error: string };
   errorText?: string;
 };
+
+function cleanAssistantText(text: string) {
+  return text
+    .replace(/!\[[^\]]*]\(\s*data:image\/[^\r\n)]*(?:\)|$)/gi, "")
+    .split("\n")
+    .filter((line) => !/data:image\//i.test(line))
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
 
 function ToolCall({ part }: { part: unknown }) {
   const p = part as ToolPart;
   const name = p.type.replace(/^tool-/, "");
   const done = p.state === "output-available";
-  const errored = p.state === "output-error";
+  const outputError = p.output && "error" in p.output ? p.output.error : undefined;
+  const errored = p.state === "output-error" || Boolean(outputError);
 
   return (
-    <div className="rounded-md border border-dashed border-gray-300 px-3 py-2 text-xs">
-      <div className="font-medium text-gray-600">
-        {name}{" "}
-        <span className="font-normal text-gray-400">
+    <div
+      className={`rounded-lg border px-3 py-3 text-xs shadow-sm transition-colors ${
+        errored ? "border-red-200 bg-red-50/30" : "border-gray-200 bg-white"
+      }`}
+    >
+      <div className="flex items-center gap-2 font-medium text-gray-600">
+        <span>{name}</span>
+        <span
+          className={`font-normal ${errored ? "text-red-500" : "text-gray-400"}`}
+        >
           {errored ? "· error" : done ? "· result" : "· calling…"}
         </span>
       </div>
-      {errored && <p className="mt-1 text-red-500">{p.errorText}</p>}
-      {done && <RowsTable output={p.output} />}
+      {errored && <ArtifactError message={p.errorText || outputError} />}
+      {!done && !errored && <ArtifactLoading />}
+      {done && !errored && <ToolArtifact output={p.output as ToolResult} />}
     </div>
-  );
-}
-
-function RowsTable({ output }: { output?: { rows?: Row[]; display?: Display } }) {
-  const rows = output?.rows ?? [];
-  if (rows.length === 0) return <p className="mt-1 text-gray-400">No rows.</p>;
-
-  const display = output?.display;
-  const columns =
-    display && display.kind === "table"
-      ? display.columns
-      : Object.keys(rows[0]);
-
-  return (
-    <table className="mt-2 w-full border-collapse text-left">
-      <thead>
-        <tr className="text-gray-400">
-          {columns.map((c) => (
-            <th key={c} className="border-b border-gray-100 py-1 pr-2 font-medium">
-              {c}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.slice(0, 8).map((row, i) => (
-          <tr key={i} className="text-gray-600">
-            {columns.map((c) => (
-              <td key={c} className="border-b border-gray-50 py-1 pr-2">
-                {String(row[c] ?? "")}
-              </td>
-            ))}
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }
