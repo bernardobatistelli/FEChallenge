@@ -1,0 +1,41 @@
+# Spec 02 — Tool catalog
+
+**Status:** Draft · **Depends on:** Spec 01 · **Estimate:** ~40m
+
+## Goal
+A clean, declarative tool surface an LLM can drive — thin wrappers over Spec 01's scoped query
+fns, including one PII-bearing tool that exercises the gate.
+
+## Contract
+Extend `buildTools(ctx)` (`src/agent/tools.ts`). Each tool delegates to a scoped query fn and
+returns `{ rows, display }`. **Boundary rule:** `tools.ts` imports from `@/db/analytics` only —
+never `@/db/client` (`db`) and never raw SQL. Params are **optional** (the mock calls with `{}`).
+
+| Tool | Query fn | inputSchema | Display |
+|------|----------|-------------|---------|
+| `applicationCountByStage` *(given)* | `applicationCountByStage` | `{ jobId? }` | `bar` (x=stage, y=count) |
+| `candidatesBySource` | `candidatesBySource` | `{}` | `bar` (x=source, y=count) |
+| `jobsOverview` | `jobsOverview` | `{ status? }` | `table` |
+| `listCandidates` **(PII-bearing)** | `listCandidates` | `{ source?, stage?, jobId?, limit? }` | `table` |
+
+- Descriptions are written *for the model*: say what the tool answers and when to pick it,
+  name the enum values it accepts (stages, sources, statuses).
+- Optional: a small per-tool try/catch helper that turns a thrown query error into a structured
+  `{ error }` result the model can read (pairs with Spec 00's `onError`).
+
+## In scope
+The four tools above + their display hints; tighten the system prompt only if the agent needs a
+nudge to pick `listCandidates` vs an aggregate.
+
+## Out of scope
+Charts (Spec 03), evals (Spec 04), the over-time tool (Spec 05).
+
+## Acceptance
+- [ ] Natural questions route to the right tool ("by stage" → stage; "where from" → source;
+      "which roles are open" → jobs; "list candidates" → candidates).
+- [ ] As `analyst`, "show me candidate emails" → tool returns rows with no PII and the agent
+      explains the restriction (no fabricated values).
+- [ ] A tool error surfaces as a clean message, not a crashed turn.
+
+## Files
+`src/agent/tools.ts` (+ optional prompt tweak in `src/agent/provider.ts`)
