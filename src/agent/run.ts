@@ -43,5 +43,11 @@ export async function streamCopilot({
     messages: await convertToModelMessages(messages),
     tools: buildTools({ workspaceId, role }),
     stopWhen: stepCountIs(6),
+    // A tool or stream failure shouldn't crash the turn. Surface it (logged) so
+    // the model can recover within the loop and tell the user the data couldn't
+    // be retrieved, per the SYSTEM_PROMPT's failure rule.
+    onError: ({ error }) => {
+      console.error("[streamCopilot] stream error:", error);
+    },
   });
 }
