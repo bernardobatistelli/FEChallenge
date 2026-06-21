@@ -89,13 +89,13 @@ export function buildTools(ctx: AnalyticsCtx) {
     // renders. Use it as the template for the tools you add.
     applicationCountByStage: tool({
       description:
-        "Count applications grouped by pipeline stage (applied, screen, interview, offer, hired, rejected). Pass a jobId to scope to one job.",
+        "Count applications grouped by pipeline stage (applied, screen, interview, offer, hired, rejected). Use it for BOTH a full breakdown by stage AND single-stage counts like 'how many candidates are in the interview stage?' — call it, then read the count for that one stage from the result. Don't ask the user for a job id; omit jobId unless they name a specific job.",
       inputSchema: z.object({
         jobId: z
           .string()
           .optional()
           .describe(
-            "Scope the counts to one job id. Omit entirely unless the user asks about a specific job; never pass an empty string.",
+            "Scope the counts to one job. Must be a REAL job id from a jobsOverview result (e.g. 'bw-job-3') — never a job title/name and never an empty string. Omit entirely unless the user named a specific job; to find the id for a named role, call jobsOverview first.",
           ),
       }),
       async execute({ jobId }) {
@@ -162,7 +162,7 @@ export function buildTools(ctx: AnalyticsCtx) {
     // "jobs and their application volume". Optional status narrows the table.
     jobsOverview: tool({
       description:
-        "List this workspace's jobs with department, status (open, closed, draft) and how many applications each has received. Use for 'which roles are open', 'open positions', or 'jobs and their application volume'. Pass status to show only jobs in that state. Returns a table — no candidate PII.",
+        "List ALL of this workspace's jobs with department, status (open, closed, draft) and how many applications each has received. Use for 'list all our jobs', 'jobs and their application volume', or 'which roles are open'. Omitting status returns every job (open, closed, AND draft) in a single call — only pass status when the user explicitly restricts to one state (e.g. 'closed positions', 'draft postings'). Returns a table — no candidate PII.",
       inputSchema: z.object({ status: z.enum(JOB_STATUSES).optional() }),
       async execute({ status }) {
         return safe("jobsOverview", async () => {

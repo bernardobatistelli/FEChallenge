@@ -9,7 +9,7 @@ import {
 import { ensureSchema } from "@/db/client";
 import type { Role } from "@/db/permissions";
 import { buildTools } from "./tools";
-import { getModel, SYSTEM_PROMPT } from "./provider";
+import { getModel, buildSystemPrompt } from "./provider";
 
 /**
  * Runs the analytics copilot for one turn and RETURNS the `streamText` result.
@@ -40,13 +40,13 @@ export async function streamCopilot({
   // degrades gracefully instead of crashing the turn.
   return streamText({
     model,
-    system: SYSTEM_PROMPT,
+    system: buildSystemPrompt(role),
     messages: await convertToModelMessages(messages),
     tools: buildTools({ workspaceId, role }),
     stopWhen: stepCountIs(6),
     // A tool or stream failure shouldn't crash the turn. Surface it (logged) so
     // the model can recover within the loop and tell the user the data couldn't
-    // be retrieved, per the SYSTEM_PROMPT's failure rule.
+    // be retrieved, per the system prompt's failure rule.
     onError: ({ error }) => {
       console.error("[streamCopilot] stream error:", error);
     },

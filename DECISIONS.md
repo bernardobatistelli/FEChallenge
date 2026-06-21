@@ -118,6 +118,45 @@ Takeaway worth keeping: tool-arg fidelity is a real constraint with these models
 *surface* (which optional params to expose) for how the model behaves; don't rely on prose to
 suppress over-filling.
 
+### Fixes from manual real-model testing
+
+A by-hand pass against `gpt-4o-mini` (prompts in `manual-test-prompts.md`, findings in
+`manual-test-prompts-finds.md`) surfaced four **behavioural** defects — none a security
+failure; tenant scope and the PII gate held by construction every time. All four traced to a
+role-blind prompt plus two biasing tool descriptions, and were fixed at the prompt/description
+layer only (the query layer, `scopeWhere`, and `candidateSelection` are untouched):
+
+- **The system prompt was role-blind** (`SYSTEM_PROMPT` const → `buildSystemPrompt(role)`).
+  The session role was never told to the model, so it guessed its own permissions — refusing a
+  *recruiter*/*admin* roster ask, then narrating the wrong identity ("as an analyst I can't…"
+  *while serving an admin*). The prompt now states the active role; this is narration/routing
+  only — a prompt-injection that convinces the model it's an admin still can't make an
+  analyst-session tool project PII, because the columns are never SELECTed. The pre-existing
+  "present whatever rows come back; only note a restriction for a column actually missing" rule
+  is kept verbatim, so a recruiter no longer wrongly claims a restriction either.
+- **`applicationCountByStage` read as "needs a job."** A plain "how many are in the interview
+  stage?" got a refusal asking for a job id. Reworded the description (and added a prompt rule)
+  so single-stage counts route to the tool and read that one bucket; omit `jobId` unless named.
+- **`jobsOverview` defaulted to open-only.** Its description led with "open positions," so
+  "list all our jobs" returned open jobs (then three separate calls when corrected). Re-led with
+  "list ALL jobs; omitting status returns every job in one call."
+- **Per-job-by-name.** Asked to break stage counts down for the "Data Analyst" role, the model
+  first invented a split of the workspace-wide numbers; an anti-fabrication rule then pushed it
+  the other way — it passed the job *name* as a `jobId`, matching zero rows and rendering an
+  empty chart. Neither is right. **Enabled it properly via tool-chaining** instead: the prompt
+  now tells the model to call `jobsOverview` (which already returns the real `id`), match the
+  title, and pass that id to `applicationCountByStage` (which already takes `jobId`) — so a
+  named-role breakdown returns real per-stage counts. Fallback when no title matches: caveat the
+  workspace-wide figure or ask — never a name-as-jobId, a fabricated split, or an empty chart.
+  No code change to the tools (the id was already in the result); the lift was prompt + the
+  `jobId` param description ("real id from jobsOverview, never a title"). Spec 00 +
+  manual-test #28 updated to match the new capability.
+
+Consistent with the smoke-test takeaway: these are *routing* fixes (under-calling / wrong
+default), not over-filling, so prose is the right lever — but `gpt-4o-mini` stays variable, so
+they're much-improved, not provably deterministic. The deterministic guarantees remain the
+job of the unit tests + adversarial evals, which this pass left untouched.
+
 ## Post-spec polish
 
 A short pass once all five specs were green, scoped for the submission rather than new

@@ -15,12 +15,21 @@ declines gracefully, replacing the boot-only mock. The mock stays the default fo
   ```
 - **Test determinism** (`vitest.config.ts`): pin `test.env = { AI_PROVIDER: "mock" }` so unit
   tests never hit a real API even if the shell exports `AI_PROVIDER=openai`.
-- **`SYSTEM_PROMPT`** (`src/agent/provider.ts`) gains these behaviors (keep the existing
+- **`buildSystemPrompt(role)`** (`src/agent/provider.ts`) — the system prompt is built per
+  turn from the session `role` (run.ts passes it), so the model knows whom it serves instead
+  of guessing. Narration/routing only; the hard PII gate stays by-construction in
+  `candidateSelection`. It carries these behaviors (keep the existing
   scope/PII/prompt-injection rules):
+  - States the active role: admin/recruiter may see PII (list it without hedging); an analyst
+    sees PII columns absent and answers from the visible columns.
   - No tool fits → say so plainly; never fabricate numbers/names/sources/trends.
   - A tool fails → say it couldn't be retrieved; offer what *can* be answered.
   - Role hides data (analyst + PII) → answer with what's visible, note the detail is
     restricted for this role, never invent the hidden values.
+  - Per-job scoping by name → chain jobsOverview (match title → real id) into the stage-count
+    tool's `jobId`; never pass a title as a jobId. If no title matches, caveat the
+    workspace-wide figure or ask which job — never fabricate a breakdown or emit an empty
+    result from a guessed id.
 - **Loop** (`src/agent/run.ts`): add `onError` to `streamText` so a tool/stream failure is
   surfaced (logged) instead of crashing the turn. Keep `stopWhen: stepCountIs(6)`.
 
