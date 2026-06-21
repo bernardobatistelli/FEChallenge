@@ -12,9 +12,9 @@ import {
   type AnalyticsCtx,
 } from "./analytics";
 import { db, ensureSchema } from "./client";
-import { canReadColumn } from "./permissions";
+import { canReadColumn, PII_COLUMNS } from "./permissions";
 import { seed } from "./seed";
-import { applications, workspaces } from "./schema";
+import { applications, jobs, workspaces } from "./schema";
 
 /**
  * Acceptance for Spec 01 — proven by calling the query fns directly (no model).
@@ -64,6 +64,14 @@ describe("canReadColumn", () => {
       }
     }
   });
+
+  // The `PII_COLUMNS[table]?.…  ?? false` branch: a table with no declared PII is
+  // readable for every role (so a future table isn't accidentally PII-gated, and
+  // a non-PII column on the candidates table stays readable for an analyst).
+  it("treats a table with no declared PII as readable for every role", () => {
+    expect(canReadColumn("analyst", "users", "email")).toBe(true); // users ∉ PII_COLUMNS
+    expect(canReadColumn("analyst", "candidates", "id")).toBe(true); // non-PII column
+  });
 });
 
 describe("candidateSelection", () => {
@@ -79,8 +87,20 @@ describe("candidateSelection", () => {
     for (const role of ["recruiter", "admin"] as const) {
       const keys = Object.keys(candidateSelection({ ...BW, role }));
       expect(keys).toEqual(
-        expect.arrayContaining(["id", "source", "createdAt", "name", "email", "phone"]),
+        expect.arrayContaining(["id", "source", "createdAt", ...PII_COLUMNS.candidates]),
       );
+    }
+  });
+
+  // Guards the guard against schema drift: tie the projection back to the single
+  // declared PII list. If a new candidate PII column is ever added to
+  // PII_COLUMNS but projected ungated, an analyst's selection would include it —
+  // and this goes red. (Drop a column from `candidateSelection`'s gated map and
+  // it stays green only because that column is then never selected for anyone.)
+  it("hides EVERY declared PII column from an analyst", () => {
+    const keys = new Set(Object.keys(candidateSelection({ ...BW, role: "analyst" })));
+    for (const column of PII_COLUMNS.candidates) {
+      expect(keys.has(column)).toBe(false);
     }
   });
 });
@@ -133,6 +153,29 @@ describe("tenant scoping", () => {
     }
   });
 
+  it("jobsOverview shows a zero-application job with count 0 (LEFT JOIN)", async () => {
+    // Every seeded job has applications, so the LEFT-JOIN "job with no apps still
+    // appears, count 0" path has no data. Construct one. Switching the join to an
+    // INNER join would drop this row — the regression this guards.
+    const JOB = "bw-job-zero-apps";
+    await db.insert(jobs).values({
+      id: JOB,
+      workspaceId: "brightwave",
+      title: "Empty Role",
+      department: "Ops",
+      location: "Remote",
+      status: "open",
+      createdAt: new Date(),
+    });
+    try {
+      const row = (await jobsOverview(BW)).find((j) => j.id === JOB);
+      expect(row).toBeDefined();
+      expect(Number(row!.applications)).toBe(0);
+    } finally {
+      await db.delete(jobs).where(eq(jobs.id, JOB));
+    }
+  });
+
   it("candidatesBySource counts only the caller's workspace", async () => {
     const total = (rows: { count: number }[]) =>
       rows.reduce((sum, r) => sum + Number(r.count), 0);
@@ -149,6 +192,21 @@ describe("tenant scoping", () => {
 
     expect(total(await applicationsOverTime(BW))).toBe(await applicationTotal(BW));
     expect(total(await applicationsOverTime(MER))).toBe(await applicationTotal(MER));
+  });
+
+  // The reference query's tenant scope was only checked transitively (as a total
+  // above). Assert it directly: BW has 24 apps, MER 19 — if `scopeWhere` dropped
+  // the workspace filter both would return the combined 43 and be equal, so this
+  // goes red on that revert.
+  it("applicationCountByStage counts only the caller's workspace", async () => {
+    const total = (rows: { count: number }[]) =>
+      rows.reduce((sum, r) => sum + Number(r.count), 0);
+
+    const bw = total(await applicationCountByStage(BW));
+    const mer = total(await applicationCountByStage(MER));
+    expect(bw).toBeGreaterThan(0);
+    expect(mer).toBeGreaterThan(0);
+    expect(bw).not.toBe(mer);
   });
 });
 

@@ -2,14 +2,15 @@
  * Role + column-permission model for the analytics copilot.
  *
  * The copilot serves users with different roles. Some columns are PII and must
- * not be readable by every role.
+ * not be readable by every role: an `analyst` may never read candidate
+ * name/email/phone; `recruiter` and `admin` may.
  *
- * TODO(candidate): PII permissions are DEFINED here but NOT yet ENFORCED.
- * An `analyst` should never be able to read PII columns (candidate
- * name/email/phone); `recruiter` and `admin` may. Wire enforcement into the
- * query layer (src/db/analytics.ts) so it cannot be skipped — ideally make a
- * PII-leaking query for the wrong role *unrepresentable*, not merely rejected
- * after the fact. Then prove it with an eval.
+ * `canReadColumn` below is the single source of truth for that rule. Enforcement
+ * is wired into the query layer by construction: `candidateSelection` in
+ * src/db/analytics.ts routes every candidate-column projection through it, so a
+ * PII column is *never SELECTed* for an analyst — the leak is unrepresentable,
+ * not stripped after the fact. Proven by unit tests (src/db/analytics.test.ts)
+ * and the adversarial PII eval (evals/copilot.eval.ts).
  */
 
 export const ROLES = ["admin", "recruiter", "analyst"] as const;

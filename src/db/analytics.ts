@@ -16,21 +16,20 @@ import { canReadColumn, type Role } from "./permissions";
 import { applications, candidates, jobs } from "./schema";
 
 /**
- * Scoped analytics data layer for the copilot.
+ * Scoped analytics data layer for the copilot — the query catalog every tool
+ * reads through (`applicationCountByStage`, `applicationsOverTime`,
+ * `candidatesBySource`, `jobsOverview`, `listCandidates`).
  *
- * This ships with ONE worked example — `applicationCountByStage` — as a
- * reference pattern. Designing the rest of the query layer the copilot needs is
- * part of the exercise (e.g. applications over time, candidates by source,
- * time-to-hire, per-job breakdowns, individual candidates, …).
+ * Two hard requirements hold for every query here, enforced by construction:
+ *  1. TENANT SCOPING — every query is constrained to `ctx.workspaceId` through
+ *     the single `scopeWhere` chokepoint. `ctx` comes first on every fn, so a
+ *     query can't even be expressed without the tenant scope.
+ *  2. PERMISSIONS — candidate PII (name / email / phone) is gated by role via
+ *     the `candidateSelection` chokepoint; an `analyst`'s PII columns are never
+ *     SELECTed (see `src/db/permissions.ts`).
  *
- * Two hard requirements for everything you add here:
- *  1. TENANT SCOPING — every query is constrained to `ctx.workspaceId`. A query
- *     must never read another workspace's rows. (Route scoping through one
- *     place — see `scopeWhere` — so it can't be forgotten as you add queries.)
- *  2. PERMISSIONS — candidate PII (name / email / phone) must be gated by role;
- *     an `analyst` may not read it (see `src/db/permissions.ts`).
- *
- * The benchmark in `evals/run.ts` verifies both against whatever tools you build.
+ * Both are verified by unit tests (`src/db/analytics.test.ts`) and the
+ * adversarial benchmark (`evals/copilot.eval.ts`).
  */
 
 export type AnalyticsCtx = { workspaceId: string; role: Role };

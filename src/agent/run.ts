@@ -34,9 +34,10 @@ export async function streamCopilot({
 }) {
   await ensureSchema();
 
-  // This is a minimal loop: one model, the tools, capped at 6 steps. Owning the
-  // loop is part of the exercise — consider tool-error handling, your stop
-  // strategy, and whether the agent should emit a typed structured answer.
+  // A minimal loop: one model, the scoped tools, capped at 6 steps via
+  // `stopWhen`. Tool failures are caught per-tool (the `safe` wrapper in
+  // tools.ts) and at the stream level (`onError` below), so a failing query
+  // degrades gracefully instead of crashing the turn.
   return streamText({
     model,
     system: SYSTEM_PROMPT,

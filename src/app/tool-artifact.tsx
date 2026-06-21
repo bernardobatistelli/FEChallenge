@@ -42,6 +42,30 @@ function formatCell(value: unknown) {
   return text;
 }
 
+/**
+ * A "nice" axis scale for the chart. The values shown here are whole-number
+ * counts, so for integer data we round the maximum UP to a clean multiple and
+ * step in whole numbers — gridlines land on integers (0 / 2 / 4 / 6 …) instead
+ * of fractions like 0.75 / 1.5 / 4.5. Returns the max to PLOT against (bars and
+ * points scale to this) alongside the matching tick stops, so the two always
+ * agree. Non-integer data (rare here) keeps 5 evenly spaced stops, unrounded.
+ */
+function axisScale(maximum: number): { max: number; ticks: number[] } {
+  const safeMax = maximum > 0 ? maximum : 1;
+  if (!Number.isInteger(safeMax)) {
+    return {
+      max: safeMax,
+      ticks: Array.from({ length: 5 }, (_, index) => (safeMax * index) / 4),
+    };
+  }
+  const intervals = Math.min(4, safeMax); // small maxes get one tick per unit
+  const step = Math.ceil(safeMax / intervals);
+  return {
+    max: step * intervals,
+    ticks: Array.from({ length: intervals + 1 }, (_, index) => index * step),
+  };
+}
+
 export function ArtifactLoading() {
   return (
     <div className="mt-3 space-y-2" aria-busy="true" aria-label="Loading data">
@@ -180,10 +204,8 @@ export function BarChart({ rows, x, y, title }: BarChartProps) {
   const rowHeight = 42;
   const height = top + values.length * rowHeight + bottom;
   const plotWidth = width - left - right;
-  const maximum = Math.max(...values.map((item) => item.value), 0);
-  const scaleMaximum = maximum || 1;
-  const ticks = Array.from({ length: 5 }, (_, index) =>
-    (scaleMaximum * index) / 4,
+  const { max: scaleMaximum, ticks } = axisScale(
+    Math.max(...values.map((item) => item.value), 0),
   );
 
   return (
@@ -198,7 +220,7 @@ export function BarChart({ rows, x, y, title }: BarChartProps) {
         className="block h-auto w-full"
       >
         {ticks.map((tick, index) => {
-          const tickX = left + (plotWidth * index) / 4;
+          const tickX = left + (plotWidth * index) / (ticks.length - 1);
           return (
             <g key={index}>
               <line
@@ -281,15 +303,10 @@ export function LineChart({ rows, x, y, title }: LineChartProps) {
   const bottom = 42;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
-  const maximum = Math.max(...values.map((item) => item.value), 0);
-  const scaleMaximum = maximum || 1;
-  const tickCount =
-    Number.isInteger(scaleMaximum) && scaleMaximum <= 4
-      ? scaleMaximum + 1
-      : 5;
-  const ticks = Array.from({ length: tickCount }, (_, index) =>
-    (scaleMaximum * index) / (tickCount - 1),
+  const { max: scaleMaximum, ticks } = axisScale(
+    Math.max(...values.map((item) => item.value), 0),
   );
+  const tickCount = ticks.length;
   const points = values.map((item, index) => ({
     ...item,
     px:

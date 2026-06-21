@@ -118,6 +118,31 @@ Takeaway worth keeping: tool-arg fidelity is a real constraint with these models
 *surface* (which optional params to expose) for how the model behaves; don't rely on prose to
 suppress over-filling.
 
+## Post-spec polish
+
+A short pass once all five specs were green, scoped for the submission rather than new
+features (analytics depth was considered and deliberately left for "another day"):
+
+- **Doc drift retired.** Several headers still read as a half-finished exercise — the
+  `permissions.ts` "PII … NOT yet ENFORCED" TODO (enforcement has shipped), the
+  `analytics.ts` "ships with ONE worked example … part of the exercise" framing, the
+  `run.ts` "owning the loop is part of the exercise" note, and two stale `evals/run.ts`
+  references (the file is `evals/copilot.eval.ts`). All rewritten to describe the code
+  as it actually is.
+- **Proof story widened** (`evals/copilot.eval.ts`, `analytics.test.ts`). The gate was
+  only proven *negative* (analyst gets no PII). Added: a **positive control** (recruiter
+  *does* get PII — proves the gate discriminates by role, isn't a blunt always-strip), a
+  **prompt-injection** input (the by-construction enforcement holds even against a
+  jailbreak ask, not just a polite one), a **combined-axis** case (analyst reaching
+  cross-tenant must satisfy both `noPII` and `noForeignRows`), and a **schema-drift unit
+  test** asserting every declared PII column is absent from an analyst's projection — so
+  adding a PII column without gating it fails a test. The guard now guards itself. A
+  **gated answer-quality LLM-judge** suite is wired but skipped unless a real model is
+  configured, so `pnpm eval` stays deterministic and free by default.
+- **Chart fix.** `BarChart` always drew 5 ticks via `(max·i)/4`, so small integer counts
+  (the common case) printed fractional gridlines (0.75, 1.5, …). Ported `LineChart`'s
+  integer-aware tick logic so axes read as clean integers.
+
 ## Trade-offs & cuts
 
 - **No "tool library" abstraction.** Considered a `createScopedQueries(ctx)` factory /
