@@ -28,3 +28,7 @@ next-env.d.ts
 
 # claude config
 .claude
+
+# local-only docs (kept on disk, not tracked)
+/DEMO.md
+/TOUR-CODIGO.md
