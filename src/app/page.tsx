@@ -60,21 +60,21 @@ export default function Page() {
   }
 
   return (
-    <main className="mx-auto grid h-dvh w-full max-w-6xl grid-cols-1 gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_280px] lg:gap-4 lg:p-4">
+    <main className="mx-auto flex h-dvh w-full max-w-6xl flex-col gap-3 p-3 md:grid md:grid-cols-[minmax(0,1fr)_260px] md:gap-4 md:p-4 lg:grid-cols-[minmax(0,1fr)_300px]">
       {/* Conversation column */}
-      <section className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
+      <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white">
+        <header className="flex flex-col gap-3 border-b border-gray-200 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-lg font-semibold">ATS Analytics Copilot</h1>
             <p className="text-xs text-gray-500">
               Chat with this workspace&rsquo;s recruiting data.
             </p>
           </div>
-          <div className="flex min-w-0 flex-wrap items-center justify-end gap-3 text-sm">
-            <label className="flex min-w-0 items-center gap-1.5">
+          <div className="flex min-w-0 flex-wrap items-center gap-3 text-sm sm:justify-end">
+            <label className="flex min-w-0 flex-1 items-center gap-1.5 sm:flex-none">
               <span className="text-gray-500">Workspace</span>
               <select
-                className="min-w-0 max-w-40 rounded border border-gray-300 px-2 py-1 text-sm"
+                className="min-w-0 flex-1 rounded border border-gray-300 px-2 py-1 text-sm sm:max-w-40 sm:flex-none"
                 value={activeWorkspace}
                 onChange={(e) => setActiveWorkspace(e.target.value)}
               >
@@ -88,7 +88,7 @@ export default function Page() {
             <label className="flex min-w-0 items-center gap-1.5">
               <span className="text-gray-500">Role</span>
               <select
-                className="min-w-0 max-w-28 rounded border border-gray-300 px-2 py-1 text-sm"
+                className="min-w-0 rounded border border-gray-300 px-2 py-1 text-sm sm:max-w-28"
                 value={role}
                 onChange={(e) => setRole(e.target.value as (typeof ROLES)[number])}
               >
@@ -201,24 +201,50 @@ export default function Page() {
       </section>
 
       {/* Side panel: a reference scoped read via tRPC (pipeline by stage). */}
-      <aside className="hidden min-h-0 min-w-0 flex-col gap-4 overflow-y-auto lg:flex">
+      {/* On phones it collapses so the chat keeps full height; expand to peek. */}
+      <details className="group shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white md:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-semibold">
+          Pipeline (this workspace)
+          <span className="text-xs font-normal text-gray-400 group-open:hidden">
+            Show
+          </span>
+          <span className="hidden text-xs font-normal text-gray-400 group-open:inline">
+            Hide
+          </span>
+        </summary>
+        <div className="max-h-[40dvh] overflow-y-auto border-t border-gray-200 px-4 py-3">
+          <PipelineList rows={pipeline.data} />
+        </div>
+      </details>
+
+      <aside className="hidden min-h-0 min-w-0 flex-col gap-4 overflow-y-auto md:flex">
         <div className="rounded-lg border border-gray-200 bg-white p-4">
           <h2 className="mb-2 text-sm font-semibold">Pipeline (this workspace)</h2>
-          {pipeline.data && pipeline.data.length > 0 ? (
-            <ul className="space-y-1">
-              {pipeline.data.map((row) => (
-                <li key={row.stage} className="flex justify-between text-xs">
-                  <span className="font-medium">{row.stage}</span>
-                  <span className="text-gray-400">{Number(row.count)}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-xs text-gray-400">No data.</p>
-          )}
+          <PipelineList rows={pipeline.data} />
         </div>
       </aside>
     </main>
+  );
+}
+
+function PipelineList({
+  rows,
+}: {
+  rows?: { stage: string; count: number }[];
+}) {
+  if (!rows || rows.length === 0) {
+    return <p className="text-xs text-gray-400">No data.</p>;
+  }
+
+  return (
+    <ul className="space-y-1">
+      {rows.map((row) => (
+        <li key={row.stage} className="flex justify-between text-xs">
+          <span className="font-medium">{row.stage}</span>
+          <span className="text-gray-400">{Number(row.count)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
